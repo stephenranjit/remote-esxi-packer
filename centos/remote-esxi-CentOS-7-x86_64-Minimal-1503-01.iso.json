@@ -1,0 +1,83 @@
+{
+  "variables": {
+    "workspace_root": "/packer/build/templates/centos7",
+    "cookbooks_root": "/packer/build/templates/centos7",
+    "template_name": "C70v1",
+    "server_role": "kubernetes_minion",
+    "build_tag":"0",
+    "iso_name": "CentOS-7-x86_64-Minimal-1503-01",
+    "datastore_name": "ds1",
+    "built_in_site": "IN",
+  },
+  "builders": [
+    {
+      "type": "vmware-iso",
+      "boot_command": [
+        "<tab> text ks=http://{{ .HTTPIP }}:{{ .HTTPPort }}/ks-{{user `iso_name`}}.iso.cfg<enter><wait>"
+      ],
+      "http_directory": "{{user `workspace_root`}}/http",
+      "guest_os_type": "centos-64",
+      "boot_wait": "5s",
+      "iso_url": "/packer/build/iso/centos/{{user `iso_name`}}.iso",
+      "iso_checksum": "d07ab3e615c66a8b2e9a50f4852e6a77",
+      "iso_checksum_type": "md5",
+      "disk_type_id": "thin",
+  "disk_size": "25000",
+  "remote_host": "10.11.121.3",
+  "remote_datastore": "{{user `datastore_name`}}",
+  "remote_username": "root",
+  "remote_password": "esx1234",
+  "remote_type": "esx5",
+  "ssh_username": "vagrant",
+  "ssh_password": "vagrant",
+  "ssh_port": 22,
+  "ssh_wait_timeout": "1000s",
+  "shutdown_command": "echo 'shutdown -P now' > shutdown.sh; echo 'vagrant'|sudo -S sh 'shutdown.sh'",
+  "vmx_data": {
+          "ethernet0.virtualDev" : "vmxnet3",
+          "ethernet0.networkName" : "VLAN 8",
+          "ethernet0.present" : "TRUE",
+          "memsize": "16000",
+          "numvcpus": "12",
+          "cpuid.coresPerSocket": "2"
+        },
+  "vm_name" : "{{user `iso_name`}}",
+  "output_directory" : "{{user `iso_name`}}",
+  "remote_cache_directory" : "{{user `iso_name`}}"
+    }
+  ],
+  "provisioners": [
+  {
+  "type": "shell",
+  "script": "{{user `cookbooks_root`}}/scripts/pre-chef.sh"
+  },
+  {
+  "type": "chef-solo",
+  "cookbook_paths": ["{{user `cookbooks_root`}}/cookbooks/"],
+  "remote_cookbook_paths": ["/tmp/"],
+  "run_list": ["sample-recipe"],
+  "json": {
+  "built_in_site":"{{user `built_in_site`}}",
+  "memcached":{"maxcon":"512","cachesize":"1024"}
+  },
+  "prevent_sudo": false,
+  "skip_install": false,
+  "execute_command": "cd /tmp/packer-chef-solo/cookbooks*/; echo 'vagrant' | {{if .Sudo}}sudo -S{{end}} chef-solo --no-color -c {{.ConfigPath}} -j {{.JsonPath}}",
+  "install_command": "echo 'vagrant' | {{if .Sudo}}sudo -S{{end}} bash -c 'curl -L https://www.opscode.com/chef/install.sh | bash'"
+  },
+  {
+  "type": "shell",
+  "execute_command": "echo 'vagrant' | {{ .Vars }} sudo -E -S sh '{{ .Path }}'",
+  "inline": ["echo birthday=\\\"`date +\"%Y-%m-%d\"`T`date +\"%H:%M:%S\"`\\\" > /etc/vm.ini",
+  "echo template=\\\"{{user `template_name`}}\\\" >> /etc/vm.ini"]
+  }
+  ],
+  "post-processors": [
+    {
+      "type": "ovftool",
+      "format": "ova",
+      "compression": "9",
+      "target":"{{user `workspace_root`}}/{{user `iso_name`}}.ova"
+    }
+  ]
+}
